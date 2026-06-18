@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts pi in an Apple container.
+# Starts pi in a Docker or Apple container.
 #
 # Expects two mounts:
 #   - pi-config/    -> /home/pi/.pi/agent  (provider config, AGENTS.md, extensions)
@@ -14,12 +14,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
 
+if command -v docker >/dev/null 2>&1; then
+  CONTAINER_CLI="docker"
+elif command -v container >/dev/null 2>&1; then
+  CONTAINER_CLI="container"
+else
+  echo "Neither 'docker' nor 'container' CLI is installed or on PATH." >&2
+  exit 1
+fi
+
 if [ ! -d "$PROJECT_DIR" ]; then
   echo "PROJECT_DIR='$PROJECT_DIR' does not exist." >&2
   exit 1
 fi
 
-container run \
+"$CONTAINER_CLI" run \
   --rm \
   --interactive \
   --tty \

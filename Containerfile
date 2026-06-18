@@ -4,7 +4,7 @@
 # bash tool-call (find, grep, rg) available, /workspace as the
 # mount target for the respective project.
 
-FROM node:22-bookworm-slim
+FROM node:26-trixie-slim
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -14,7 +14,10 @@ RUN apt-get update \
       iproute2 \
  && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @mariozechner/pi-coding-agent
+RUN npm install -g --ignore-scripts \
+     @mariozechner/pi-coding-agent
+
+RUN pi update
 
 ARG PI_UID=1000
 ARG PI_GID=1000
@@ -25,8 +28,15 @@ RUN userdel --remove node 2>/dev/null || true \
  && groupadd --gid ${PI_GID} pi \
  && useradd --uid ${PI_UID} --gid ${PI_GID} --create-home --shell /bin/bash pi
 
+ENV NPM_CONFIG_PREFIX=/home/pi/.npm-global
+ENV PATH=/home/pi/.npm-global/bin:$PATH
+
+COPY --chown=pi:pi pi-config/ /home/pi/.pi/agent/
+
 USER pi
 WORKDIR /workspace
+
+RUN pi update --extensions
 
 # pi reads ~/.pi/agent/* at runtime; the directory is mounted via a volume.
 ENTRYPOINT ["pi"]

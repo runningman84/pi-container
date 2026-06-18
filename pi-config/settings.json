@@ -1,0 +1,14 @@
+{
+  "lastChangelogVersion": "0.79.6",
+  "theme": "dark",
+  "defaultProvider": "github-copilot",
+  "defaultModel": "gemini-3.5-flash",
+  "llamaServerUrl": "http://host.docker.internal:8080",
+  "packages": [
+    "npm:safe-coder",
+    "npm:pi-smart-compact",
+    "npm:pi-llama-cpp",
+    "npm:pi-web-access"
+  ],
+  "defaultThinkingLevel": "medium"
+}

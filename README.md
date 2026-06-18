@@ -6,13 +6,13 @@
 
 <p align="center">
   <strong>A sovereign, npm-free local coding agent on macOS.</strong><br>
-  The <code>pi</code> coding agent runs in a disposable Apple <code>container</code> micro-VM and talks to a local
-  MLX-Swift model on the host — no Node, no npm, no agent binary on your work machine.
+  The <code>pi</code> coding agent runs in a disposable container runtime (Docker or Apple <code>container</code> CLI)
+  and talks to a local MLX-Swift model on the host — no Node, no npm, no agent binary on your work machine.
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2026%20(Tahoe)%20%C2%B7%20Apple%20Silicon-black" alt="platform">
-  <img src="https://img.shields.io/badge/runtime-Apple%20container-blue" alt="runtime">
+  <img src="https://img.shields.io/badge/runtime-Docker%20or%20Apple%20container-blue" alt="runtime">
   <img src="https://img.shields.io/badge/agent-pi--coding--agent%20%C2%B7%20Node%2022-339933" alt="agent">
   <img src="https://img.shields.io/badge/model-gemma--4--26b%20%C2%B7%20MLX--Swift-orange" alt="model">
   <img src="https://img.shields.io/badge/status-hands--on%20draft-yellow" alt="status">
@@ -25,7 +25,7 @@
 A modern coding agent reads your files, runs shell commands, and installs whatever it decides it needs. On a work machine in a regulated context that is an unacceptable blast radius. This repository contains a **runnable setup** that closes it:
 
 - **Inference stays native on the host** — MLX-Swift needs Apple Silicon's Metal/ANE, which a Linux VM does not expose.
-- **The agent runtime is sandboxed in its own VM** — Apple `container` gives each container a lightweight VM, not shared-kernel namespaces.
+- **The agent runtime is sandboxed in a container boundary** — `scripts/build.sh` and `scripts/run.sh` auto-detect and use Docker first, then Apple `container` if Docker is unavailable.
 - **The host stays clean** — no Node, no npm, no `pi` binary; the agent lives only inside an image and is discarded on exit.
 
 The full step-by-step walkthrough is the article **[`en-pi-apple-container.md`](en-pi-apple-container.md)** (English companion to a German MLX-Swift writing series). The files in this repo are the runnable reference for that article — change one, change the other.
@@ -34,7 +34,7 @@ The full step-by-step walkthrough is the article **[`en-pi-apple-container.md`](
 
 ```
 ┌─────────────────────────────┐        ┌──────────────────────────────┐
-│ Host (macOS, Apple Silicon) │        │ Apple Container (Linux VM)   │
+│ Host (macOS, Apple Silicon) │        │ Container Runtime             │
 │                             │        │                              │
 │  MLX-Swift server           │◄──────►│  pi-coding-agent             │
 │  /v1/chat/completions       │ Bridge │  (Node 22, ripgrep, git)     │
@@ -44,6 +44,8 @@ The full step-by-step walkthrough is the article **[`en-pi-apple-container.md`](
 
 - **Inference** runs on the host (it has to — no Metal/ANE in a Linux VM).
 - **Tool-calling sandbox** runs in the container — a clean split between model runtime and agent runtime.
+- **Runtime choice** is automatic in the scripts: Docker when available, otherwise Apple `container`.
+- **Docker on macOS uses a VM too** — Docker Desktop runs containers inside a background Linux VM on macOS.
 - **pi** reaches the host only over the container bridge; the gateway IP is environment-dependent and discovered at runtime, never hardcoded.
 
 ## Table of contents
@@ -71,16 +73,16 @@ The full step-by-step walkthrough is the article **[`en-pi-apple-container.md`](
 │       └── protected-paths/
 │           └── index.ts                          # tool-call guardrail for sensitive paths
 └── scripts/
-    ├── build.sh                                  # container build
-    └── run.sh                                    # container run with the right mounts
+    ├── build.sh                                  # build via docker/container auto-detect
+    └── run.sh                                    # run via docker/container auto-detect
 ```
 
 `pi-config/` is mounted into the container at runtime as the agent's config directory. Its `sessions/`, `cache/`, and `logs/` subdirectories are produced by pi during a session and are git-ignored — runtime artifacts, not configuration.
 
 ## Prerequisites
 
-- **macOS 26 (Tahoe) on Apple Silicon, recommended.** `container` technically runs on macOS 15, but its networking is significantly limited there and this whole setup lives or dies on container-to-host networking. Treat macOS 15 as unsupported here.
-- Apple `container` CLI installed (`container --version` must answer).
+- **macOS 26 (Tahoe) on Apple Silicon, recommended.** If you use Apple `container`, this is strongly recommended because container-to-host networking is core to this setup.
+- One container CLI installed: Docker (`docker --version`) or Apple `container` (`container --version`). The scripts auto-detect either runtime.
 - **macOS Local Network permission grantable** — recent macOS gates local traffic behind a privacy prompt; it must be allowed for the container runtime.
 - A local model server running **on the host** with an OpenAI-compatible `/v1/chat/completions` endpoint, serving the model you've loaded (e.g. `gemma-4-26b-a4b-it-4bit`), bound to `0.0.0.0:8080` (not only `127.0.0.1`). Native tool-calling is model-dependent — verify it for an agent workflow.
 - **No Node and no npm on the host** — that is the point; the agent lives only in the image.
@@ -97,13 +99,24 @@ Produces `pi-coding-agent:local` (override the tag with `IMAGE_TAG=...`).
 
 ### 2. Discover the host bridge IP
 
-From inside the container, the host is reachable via the bridge's default gateway. The address is environment-dependent, so discover it instead of assuming a subnet. The image's entrypoint is `pi`, so override it with `--entrypoint sh` for a one-off command (otherwise `pi` starts and reports "No API key found for the selected model"):
+From inside the container, the host is reachable via the bridge's default gateway. The address is environment-dependent, so discover it instead of assuming a subnet. **This IP is essential for the container to reach any local inference server on the Mac** (MLX-Swift, Unsloth Studio, llama.cpp, etc.). 
+
+Run this command to discover your bridge IP:
 
 ```bash
-container run --rm --entrypoint sh pi-coding-agent:local -c "ip route | awk '/default/ {print \$3}'"
+if command -v docker >/dev/null 2>&1; then RUNTIME=docker; else RUNTIME=container; fi
+$RUNTIME run --rm --entrypoint sh pi-coding-agent:local -c "ip route | awk '/default/ {print \$3}'"
 ```
 
-If the printed gateway differs from the default in `pi-config/models.json`, update `providers.mlx-local.baseUrl` accordingly (keep the `:8080/v1` suffix).
+The output will be the bridge IP (e.g., `192.168.64.1` for Apple container, or `172.17.0.1` for Docker).
+
+**Use this IP in `pi-config/models.json`** for any local server on the Mac. For example, if your llama server runs on port 8000:
+
+```json
+"baseUrl": "http://<BRIDGE_IP>:8000/v1"
+```
+
+Replace `<BRIDGE_IP>` with the discovered IP. If it differs from the default in `pi-config/models.json`, update it accordingly (keep the `/v1` suffix for OpenAI-compatible endpoints).
 
 ### 3. Run the agent
 
@@ -116,7 +129,7 @@ PROJECT_DIR=~/projects/your-repo ./scripts/run.sh --model mlx-local/gemma4-instr
 - `pi-config/` → `/home/pi/.pi/agent` (provider config, `AGENTS.md`, extensions)
 - `$PROJECT_DIR` → `/workspace` (the project being worked on)
 
-`--rm` discards the VM and its writable layer on exit. The host is byte-for-byte unchanged.
+`--rm` removes the container runtime instance and writable layer on exit. The host is byte-for-byte unchanged.
 
 ## Configuration
 
@@ -126,7 +139,7 @@ Defines the `mlx-local` provider with `api: "openai-completions"` and a nested `
 
 ### Global agent rules — `pi-config/AGENTS.md`
 
-Loaded into every session as the operating contract: runs in an Apple container, host not directly reachable, file operations only affect `/workspace`, model reached only over the bridge, no external calls or telemetry without explicit instruction, and tool discipline (`read` before `edit`, `write` only for new files, no `npm install` without confirmation).
+Loaded into every session as the operating contract: runs in a container, host not directly reachable, file operations only affect `/workspace`, model reached only over the bridge, no external calls or telemetry without explicit instruction, and tool discipline (`read` before `edit`, `write` only for new files, no `npm install` without confirmation).
 
 ### Extension — `protected-paths`
 
@@ -146,6 +159,8 @@ A defense-in-depth backstop at `pi-config/extensions/protected-paths/index.ts`. 
 ## The article
 
 **[`en-pi-apple-container.md`](en-pi-apple-container.md)** is a hands-on draft for external publication. It covers, in order: why a coding agent belongs in a container, why Apple `container` over Docker on Apple Silicon, then a careful nine-step walkthrough (install `container` → verify the host model → build → discover the bridge IP → wire `models.json` → guardrails → run → smoke-test) plus troubleshooting.
+
+This repository now supports both Docker and Apple `container` CLI via script auto-detection. The article remains Apple-container-focused by design.
 
 The code blocks in the article mirror the `Containerfile`, `pi-config/`, and `scripts/` files in this repo verbatim. **Keep them consistent** — if you change a runnable file, update the article, and vice versa.
 

@@ -3,6 +3,9 @@
 pi-config/sessions/
 pi-config/cache/
 pi-config/logs/
+pi-config/bin/
+pi-config/npm/
+pi-config/auth.json
 
 # macOS cruft
 .DS_Store

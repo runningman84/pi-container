@@ -1,13 +1,17 @@
 {
   "providers": {
     "mlx-local": {
-      "baseUrl": "http://192.168.64.1:8080/v1",
+      "baseUrl": "http://host.docker.internal:8080/v1",
       "api": "openai-completions",
       "apiKey": "not-required",
       "models": [
         {
-          "id": "/Users/michael/models/gemma-4-26b-a4b-it-4bit",
-          "name": "mlx-local/gemma4-instruct"
+          "id": "unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+          "name": "unsloth/gemma4-12b"
+        },
+        {
+          "id": "unsloth/gemma-4-26B-A4B-it-qat-GGUF:UD-Q4_K_XL",
+          "name": "unsloth/gemma4-26b"
         }
       ]
     }

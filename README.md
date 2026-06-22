@@ -63,15 +63,12 @@ The full step-by-step walkthrough is the article **[`en-pi-apple-container.md`](
 
 ```
 .
-├── en-pi-apple-container.md                      # the step-by-step article (English)
 ├── blog-image.jpg                                # article / README banner
 ├── Containerfile                                 # node:22-bookworm-slim + pi installed globally
 ├── pi-config/
 │   ├── AGENTS.md                                 # global agent rules (container variant)
 │   ├── models.json                               # provider + model definition
 │   └── extensions/
-│       └── protected-paths/
-│           └── index.ts                          # tool-call guardrail for sensitive paths
 └── scripts/
     ├── build.sh                                  # build via docker/container auto-detect
     └── run.sh                                    # run via docker/container auto-detect
@@ -143,7 +140,9 @@ Loaded into every session as the operating contract: runs in a container, host n
 
 ### Extension — `protected-paths`
 
-A defense-in-depth backstop at `pi-config/extensions/protected-paths/index.ts`. It hooks pi's `tool_call` event and forces a confirmation (or hard-denies) for sensitive directories (`~/.ssh`, `~/.aws`, `~/.config/gcloud`, `/run/secrets`, `/etc`) and patterns (`.env`, `credentials.json`, `id_rsa`, `id_ed25519`, `*.pem`, `*.p12`) — inspecting both file-tool paths and `bash` commands. The container is the strong boundary; this is the seatbelt for the day someone widens a mount.
+There used to be a custom extension called protected path. I removed it in favor of extensions like these:
+https://pi.dev/packages/pi-permission-system
+https://pi.dev/packages/safe-coder
 
 ## Troubleshooting
 
@@ -158,11 +157,9 @@ A defense-in-depth backstop at `pi-config/extensions/protected-paths/index.ts`. 
 
 ## The article
 
-**[`en-pi-apple-container.md`](en-pi-apple-container.md)** is a hands-on draft for external publication. It covers, in order: why a coding agent belongs in a container, why Apple `container` over Docker on Apple Silicon, then a careful nine-step walkthrough (install `container` → verify the host model → build → discover the bridge IP → wire `models.json` → guardrails → run → smoke-test) plus troubleshooting.
+Michael Hannecke wrote an article about the original idea here: https://medium.com/@michael.hannecke/a-sovereign-coding-agent-on-macos-pi-in-an-apple-container-zero-npm-on-the-host-46f62ffade0a
 
-This repository now supports both Docker and Apple `container` CLI via script auto-detection. The article remains Apple-container-focused by design.
-
-The code blocks in the article mirror the `Containerfile`, `pi-config/`, and `scripts/` files in this repo verbatim. **Keep them consistent** — if you change a runnable file, update the article, and vice versa.
+This repository now supports both Docker and Apple `container` CLI via script auto-detection.
 
 ## Notes & caveats
 
